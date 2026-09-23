@@ -99,7 +99,11 @@ export class Interrupt {
 
 /**
  * Error thrown when human input is required to continue agent execution.
- * Caught by the agent loop to trigger an interrupt stop.
+ *
+ * `ToolContext.interrupt()` and hook `event.interrupt()` throw this error when no
+ * response exists for the interrupt yet. The agent loop catches it and stops with
+ * `stopReason: 'interrupt'`. Code that catches errors around an `interrupt()` call
+ * (inside a tool, hook, or middleware) must re-throw it so the agent can pause.
  */
 export class InterruptError extends Error {
   /**
