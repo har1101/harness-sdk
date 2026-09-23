@@ -1,4 +1,9 @@
-import { Agent, tool } from '@strands-agents/sdk'
+import { Agent, ConcurrentToolExecutor, tool } from '@strands-agents/sdk'
+import type {
+  AgentStreamEvent,
+  ToolExecutionInput,
+  ToolExecutorOptions,
+} from '@strands-agents/sdk'
 import { z } from 'zod'
 
 const weatherTool = tool({
@@ -56,4 +61,31 @@ const emailTool = tool({
 
   await agent.invoke('Take a screenshot and email it to my friend')
   // --8<-- [end:sequential]
+}
+
+{
+  // --8<-- [start:custom]
+  class TimedToolExecutor extends ConcurrentToolExecutor {
+    override async *execute(
+      options: ToolExecutorOptions,
+      input: ToolExecutionInput
+    ): AsyncGenerator<AgentStreamEvent, void, undefined> {
+      const start = Date.now()
+      try {
+        yield* super.execute(options, input)
+      } finally {
+        console.log(
+          `${input.toolUseBlocks.length} tool uses took ${Date.now() - start} ms`
+        )
+      }
+    }
+  }
+
+  const agent = new Agent({
+    tools: [weatherTool, timeTool],
+    toolExecutor: new TimedToolExecutor(),
+  })
+
+  await agent.invoke('What is the weather and time in New York?')
+  // --8<-- [end:custom]
 }

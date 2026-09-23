@@ -21,7 +21,8 @@ import type { Tool, ToolContext } from '../tool.js'
 /**
  * Dependencies supplied for one tool-executor invocation.
  *
- * @internal
+ * Custom executors read `agent` and `cancelSignal` and pass the whole object
+ * unchanged to {@link ToolExecutor.executeTool}.
  */
 export interface ToolExecutorOptions {
   /** Agent whose tools are being executed. */
@@ -34,17 +35,20 @@ export interface ToolExecutorOptions {
   readonly meter: Meter
   /** Cancellation signal scoped to this executor invocation. */
   readonly cancelSignal: AbortSignal
+  /** Replaces `ToolContext.interrupt` for background-task runs. @internal */
   readonly toolInterrupt?: ToolContext['interrupt']
+  /** Replaces the `ExecuteToolStage` middleware interrupt for background-task runs. @internal */
   readonly middlewareInterrupt?: ExecuteToolContext['interrupt']
+  /** Checks that the selected tool may run as a background task. @internal */
   readonly toolGuard?: (tool: Tool | undefined) => void
+  /** Background task manager for tools that run in the background. @internal */
   readonly backgroundTasks?: BackgroundTasks
+  /** Tracking id of the assistant message whose background tasks are dispatched. @internal */
   readonly backgroundTaskPassId?: string
 }
 
 /**
  * Input for executing the tool calls from one model turn.
- *
- * @internal
  */
 export interface ToolExecutionInput {
   /** Tool calls to execute. */
@@ -60,24 +64,40 @@ export interface ToolExecutionInput {
 }
 
 /**
- * Shared pipeline for executing tool calls.
+ * Base class for tool executors, which run the tool uses from one assistant turn.
  *
- * @internal
+ * To add behavior around a batch, extend {@link ConcurrentToolExecutor} or
+ * {@link SequentialToolExecutor} and wrap `super.execute()`. To change how tool uses
+ * are scheduled, extend `ToolExecutor` and run each tool use through
+ * {@link ToolExecutor.executeTool}.
  */
 export abstract class ToolExecutor {
   /**
-   * Executes the tool calls from one model turn.
+   * Executes the tool uses from one assistant turn.
+   *
+   * Implementations must:
+   * - push one result per tool use into `input.toolResultBlocks`, reusing the result from
+   *   `input.completedToolResults` instead of running a tool use again on resume
+   * - yield the events from {@link ToolExecutor.executeTool} and a `ToolResultEvent` per result
+   * - stop starting new tool uses once `options.cancelSignal` is aborted
+   * - when a tool use throws `InterruptError`, pass the results collected so far to
+   *   `storePendingToolExecution` before re-throwing, so the agent can resume without
+   *   calling the model again
    *
    * @param options - Agent dependencies used to execute tools
    * @param input - Tool calls and invocation state
    * @returns Stream of tool lifecycle events
-   * @internal
    */
   abstract execute(
     options: ToolExecutorOptions,
     input: ToolExecutionInput
   ): AsyncGenerator<AgentStreamEvent, void, undefined>
 
+  /**
+   * Runs a tool call dispatched by the agent's background task manager.
+   *
+   * @internal
+   */
   async executeBackground(
     options: ToolExecutorOptions,
     toolUse: ToolUseData,
@@ -102,8 +122,19 @@ export abstract class ToolExecutor {
     }
   }
 
-  // Tool lookup and tool-body failures become ToolResultBlocks so the model can
-  // respond to them; lifecycle and middleware failures may still propagate.
+  /**
+   * Runs one tool use through the agent's tool pipeline: `BeforeToolCallEvent` and
+   * `AfterToolCallEvent` hooks, `ExecuteToolStage` middleware, retries requested by
+   * `AfterToolCallEvent.retry`, tracing, and metrics.
+   *
+   * Tool lookup failures and errors thrown by the tool, other than `InterruptError`, become
+   * error results. `InterruptError` and errors from hooks and middleware propagate.
+   *
+   * @param options - Dependencies passed to {@link ToolExecutor.execute}
+   * @param toolUseBlock - Tool use to run
+   * @param invocationState - State shared across the current agent invocation
+   * @returns Stream of tool lifecycle events; the generator returns the tool result
+   */
   protected async *executeTool(
     options: ToolExecutorOptions,
     toolUseBlock: ToolUseBlock,
@@ -233,9 +264,15 @@ export abstract class ToolExecutor {
     })
   }
 
-  // Keys and serialized results use model-issued toolUseIds so resume and
-  // provider correlation match the assistant's tool-use blocks.
-  protected _storePendingToolExecution(
+  /**
+   * Records the tool results completed before an `InterruptError`, so the agent resumes
+   * this batch without calling the model again and skips the recorded tool uses.
+   *
+   * @param options - Dependencies passed to {@link ToolExecutor.execute}
+   * @param assistantMessage - Assistant message that requested the tool calls
+   * @param completedToolResults - Results keyed by the model-issued `toolUseId`
+   */
+  protected storePendingToolExecution(
     options: ToolExecutorOptions,
     assistantMessage: Message,
     completedToolResults: ReadonlyMap<string, ToolResultBlock>

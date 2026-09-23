@@ -90,6 +90,7 @@ import {
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
 import { ConcurrentToolExecutor } from '../tools/executors/concurrent.js'
 import { SequentialToolExecutor } from '../tools/executors/sequential.js'
+import type { ToolExecutor } from '../tools/executors/executor.js'
 import { AgentAsTool } from './agent-as-tool.js'
 import type { AgentAsToolOptions } from './agent-as-tool.js'
 import { ToolCaller } from './tool-caller.js'
@@ -281,10 +282,10 @@ export type AgentConfig = {
    * Executor for tool calls from a single assistant turn.
    *
    * Accepts a {@link ConcurrentToolExecutor}, a {@link SequentialToolExecutor},
-   * or the corresponding {@link ToolExecutorStrategy} string shorthand.
-   * Defaults to concurrent execution.
+   * a custom {@link ToolExecutor} subclass, or a {@link ToolExecutorStrategy}
+   * string shorthand. Defaults to concurrent execution.
    */
-  toolExecutor?: ConcurrentToolExecutor | SequentialToolExecutor | ToolExecutorStrategy
+  toolExecutor?: ToolExecutor | ToolExecutorStrategy
   /**
    * When `true`, the agent loop pauses at cycle boundaries (`afterModel`,
    * `afterTools`) and returns `stopReason: 'checkpoint'` with a populated
@@ -350,9 +351,7 @@ function resolveConversationManager(
 /**
  * Resolves a tool executor instance from an executor or string shorthand.
  */
-function resolveToolExecutor(
-  toolExecutor: ConcurrentToolExecutor | SequentialToolExecutor | ToolExecutorStrategy | undefined
-): ConcurrentToolExecutor | SequentialToolExecutor {
+function resolveToolExecutor(toolExecutor: ToolExecutor | ToolExecutorStrategy | undefined): ToolExecutor {
   switch (toolExecutor) {
     case 'sequential':
       return new SequentialToolExecutor()
@@ -496,7 +495,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   /** Interrupt state for human-in-the-loop workflows. */
   _interruptState: InterruptState
   /** Executor for tool calls from a single assistant turn. */
-  private _toolExecutor: ConcurrentToolExecutor | SequentialToolExecutor
+  private _toolExecutor: ToolExecutor
   /** When true, the agent loop pauses at cycle boundaries for durable execution. */
   private readonly _checkpointing: boolean
   /** Direct tool caller — created via {@link ToolCaller.create} factory. */
@@ -961,11 +960,11 @@ export class Agent implements LocalAgent, InvokableAgent {
    *
    * @throws Error if assigned an unrecognized string shorthand.
    */
-  get toolExecutor(): ConcurrentToolExecutor | SequentialToolExecutor {
+  get toolExecutor(): ToolExecutor {
     return this._toolExecutor
   }
 
-  set toolExecutor(toolExecutor: ConcurrentToolExecutor | SequentialToolExecutor | ToolExecutorStrategy) {
+  set toolExecutor(toolExecutor: ToolExecutor | ToolExecutorStrategy) {
     this._toolExecutor = resolveToolExecutor(toolExecutor)
   }
 

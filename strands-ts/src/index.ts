@@ -151,6 +151,8 @@ export type { ZodToolConfig } from './tools/zod-tool.js'
 export { tool } from './tools/tool-factory.js'
 
 // Tool executors
+export { ToolExecutor } from './tools/executors/executor.js'
+export type { ToolExecutorOptions, ToolExecutionInput } from './tools/executors/executor.js'
 export { ConcurrentToolExecutor } from './tools/executors/concurrent.js'
 export { SequentialToolExecutor } from './tools/executors/sequential.js'
 

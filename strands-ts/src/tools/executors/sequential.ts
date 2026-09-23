@@ -28,7 +28,6 @@ export class SequentialToolExecutor extends ToolExecutor {
    * @param options - Agent dependencies used to execute tools
    * @param input - Tool calls and invocation state
    * @returns Stream of tool lifecycle events
-   * @internal
    */
   override async *execute(
     options: ToolExecutorOptions,
@@ -67,7 +66,7 @@ export class SequentialToolExecutor extends ToolExecutor {
         yield new ToolResultEvent({ agent: options.agent, result: toolResultBlock, invocationState })
       } catch (error) {
         if (error instanceof InterruptError) {
-          this._storePendingToolExecution(options, assistantMessage, resultsByToolUseId)
+          this.storePendingToolExecution(options, assistantMessage, resultsByToolUseId)
         }
         throw error
       }

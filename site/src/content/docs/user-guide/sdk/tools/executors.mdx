@@ -9,6 +9,7 @@ sourceLinks:
   - path: strands-py/src/strands/tools/executors/sequential.py
   - path: strands-ts/src/tools/executors/concurrent.ts
   - path: strands-ts/src/tools/executors/sequential.ts
+  - path: strands-ts/src/tools/executors/executor.ts
 ---
 
 Tool executors control whether tools from a single assistant turn run concurrently or sequentially. Both SDKs default to concurrent execution.
@@ -126,4 +127,28 @@ Cancellation works identically in both modes. Call `agent.cancel()` to request c
 
 ## Custom Executors
 
+<Tabs>
+<Tab label="Python">
+
 Custom tool executors are not currently supported but are planned for a future release. You can track progress on this feature at [GitHub Issue #762](https://github.com/strands-agents/harness-sdk/issues/762).
+
+</Tab>
+<Tab label="TypeScript">
+
+To add behavior around each batch of tool uses, extend `ConcurrentToolExecutor` or `SequentialToolExecutor` and wrap `super.execute()`:
+
+```typescript
+--8<-- "user-guide/sdk/tools/executors_imports.ts:custom_imports"
+
+--8<-- "user-guide/sdk/tools/executors.ts:custom"
+```
+
+To change how tool uses are scheduled, extend `ToolExecutor` and implement `execute()`. Run each tool use through the protected `executeTool()` method so hooks, middleware, retries, tracing, and metrics still apply. Your `execute()` must:
+
+- push one result per tool use into `input.toolResultBlocks`, reusing the result in `input.completedToolResults` instead of running a tool use again when the agent resumes from an interrupt
+- yield the events from `executeTool()` and a `ToolResultEvent` for each result
+- stop starting new tool uses once `options.cancelSignal` is aborted
+- when a tool use throws `InterruptError`, pass the results collected so far to `storePendingToolExecution()` before re-throwing
+
+</Tab>
+</Tabs>

@@ -30,8 +30,9 @@ describe('index', () => {
       })
     })
 
-    it('does not export the internal ToolExecutor base', () => {
-      expect(SDK).not.toHaveProperty('ToolExecutor')
+    it('exports ToolExecutor as the base of the built-in executors', () => {
+      expect(new SDK.ConcurrentToolExecutor()).toBeInstanceOf(SDK.ToolExecutor)
+      expect(new SDK.SequentialToolExecutor()).toBeInstanceOf(SDK.ToolExecutor)
     })
 
     it('exports model routing values', () => {

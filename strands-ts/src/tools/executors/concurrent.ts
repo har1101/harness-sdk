@@ -35,7 +35,6 @@ export class ConcurrentToolExecutor extends ToolExecutor {
    * @param options - Agent dependencies used to execute tools
    * @param input - Tool calls and invocation state
    * @returns Stream of tool lifecycle events
-   * @internal
    */
   override async *execute(
     options: ToolExecutorOptions,
@@ -124,7 +123,7 @@ export class ConcurrentToolExecutor extends ToolExecutor {
       }
 
       if (interruptError) {
-        this._storePendingToolExecution(options, assistantMessage, resultsByToolUseId)
+        this.storePendingToolExecution(options, assistantMessage, resultsByToolUseId)
         throw interruptError
       }
     } finally {
