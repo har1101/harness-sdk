@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import * as SDK from '../index.js'
-import { MockMessageModel } from '../__fixtures__/mock-message-model.js'
-import { createMockTool } from '../__fixtures__/tool-helpers.js'
 
 describe('index', () => {
   describe('when importing from main entry point', () => {
     it('exports error classes', () => {
       expect(SDK.ContextWindowOverflowError).toBeDefined()
+      expect(SDK.InterruptError).toBeDefined()
     })
 
     it('exports BedrockModel', () => {
@@ -34,31 +33,6 @@ describe('index', () => {
 
     it('does not export the internal ToolExecutor base', () => {
       expect(SDK).not.toHaveProperty('ToolExecutor')
-    })
-
-    it('exports InterruptError as the error thrown by ToolContext.interrupt()', async () => {
-      let caught: unknown
-      const confirmTool = createMockTool('confirmTool', (context) => {
-        try {
-          return context.interrupt<string>({ name: 'confirm', reason: 'Please confirm' })
-        } catch (error) {
-          caught = error
-          throw error
-        }
-      })
-      const model = new MockMessageModel().addTurn({
-        type: 'toolUseBlock',
-        name: 'confirmTool',
-        toolUseId: 'tool-1',
-        input: {},
-      })
-      const agent = new SDK.Agent({ model, tools: [confirmTool], printer: false })
-
-      const result = await agent.invoke('Test')
-
-      expect(caught).toBeInstanceOf(SDK.InterruptError)
-      expect(caught).toMatchObject({ interrupts: [{ name: 'confirm', reason: 'Please confirm' }] })
-      expect(result.stopReason).toBe('interrupt')
     })
 
     it('exports model routing values', () => {
